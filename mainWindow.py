@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
-
 from PySide6.QtWidgets import QApplication, QMainWindow, QButtonGroup, QFileDialog, QTableWidgetItem, QMenu, QToolButton, QMessageBox, QTreeWidgetItem
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon, QPixmap, QColor, QCursor
@@ -1036,7 +1034,7 @@ class ATM_UI(QMainWindow):
     # 读取写入一些与自身有关的文件
     def read_msr_rem(self):
         try:
-            with open('./config_files/msr_switch.txt', 'r', encoding='utf-8') as f:
+            with open('./conf/msr_switch.txt', 'r', encoding='utf-8') as f:
                 a = f.readline()
             m, s, r = a.split(',')
             if m == 'True':
@@ -1049,7 +1047,7 @@ class ATM_UI(QMainWindow):
             pass
 
     def write_msr_rem(self):
-        with open('./config_files/msr_switch.txt', 'w', encoding='utf-8') as f:
+        with open('./conf/msr_switch.txt', 'w', encoding='utf-8') as f:
             d = ','.join((str(self.ui.mod_btn.isChecked()), str(self.ui.shad_btn.isChecked()),
                           str(self.ui.rig_btn.isChecked())))
             f.write(d)
@@ -1105,6 +1103,6 @@ class ATM_UI(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication([])
-    Asset_Managenment = ATM_UI('组长', '张')
+    Asset_Managenment = ATM_UI('制片', '张')
     Asset_Managenment.show()
     app.exec()
