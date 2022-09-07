@@ -9,16 +9,17 @@ from PySide6.QtGui import QCursor
 from QmyComboBoxDelegate import QmyComboBoxDelegate
 from ui_Producer_window import Ui_MainWindow
 from configparser import ConfigParser
+from EmptyDelegate import EmptyDelegate
 
-
-
-class Main_Window(QMainWindow):
+class myProducerWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.__logmysql()
         self.setWindowTitle('人员名单列表')
+
+        #self.changed = True
 
         self.ui.tableView.setSelectionBehavior(QAbstractItemView.SelectItems)
         #self.ui.tableView.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -32,48 +33,51 @@ class Main_Window(QMainWindow):
         self.ui.statusbar.addWidget(self.LabProdNum)
         #self.ui.open_sql_btn.setText('打开数据库?')
         #print(QSqlDatabase.drivers())
+        self.ui.reload_btn.setEnabled(0)
+
+    def __del__(self):
+        print("myProducerWindow 对象被删除了")
+
+    def set_limit(self, limit):
+        self.limit = limit
         self.on_reload_btn_clicked()
-
-
-        self.ui.tableView.setContextMenuPolicy(Qt.CustomContextMenu)  # 开启自定义菜单 (继承自 QWidget)
-        self.ui.tableView.customContextMenuRequested.connect(self.tableWidgetCustomContextMenu)
-
+        # if self.changed:
+        #     self.changed = False
+        # else:
+        #     return
+        if limit == 'GM':
+                self.ui.tableView.setContextMenuPolicy(Qt.CustomContextMenu)  # 开启自定义菜单 (继承自 QWidget)
+                self.ui.tableView.customContextMenuRequested.connect(self.tableWidgetCustomContextMenu)
+                self.tabModel.setEditStrategy(QSqlTableModel.OnFieldChange)     # 设置编辑策略 OnFieldChange 字段值变化就立即更新到数据库 OnRowChange(当前行变化更新到数据库)
+                                                                                # OnManualSubmit(所有修改暂时缓存,需要手动调用submitAll()保存所有修改,或reverAll()取消修改)
+                strList = ['资产', '动画', '后期', '制片']
+                self.__delegateDepartment = QmyComboBoxDelegate()
+                self.__delegateDepartment.setItems(strList, True)
+                self.ui.tableView.setItemDelegateForColumn(self.fldNum['department'], self.__delegateDepartment)
+                strList = ['组员', '组长']
+                self.__delegatePosition = QmyComboBoxDelegate()
+                self.__delegatePosition.setItems(strList, True)
+                self.ui.tableView.setItemDelegateForColumn(self.fldNum['position'], self.__delegatePosition)
+            # self.ui.tableView.setItemDelegateForColumn(self.fldNum['id'], EmptyDelegate(self))  # 设置不可编辑
+        else:
+            if not limit == '制片':
+                self.ui.tableView.setColumnHidden(self.fldNum['department'], True)  # 隐藏列
+                self.ui.tableView.setColumnHidden(self.fldNum['position'], True)
+            self.ui.add_producer_btn.setEnabled(0)
+            self.ui.delete_producer_btn.setEnabled(0)
+            self.ui.tableView.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 所有都为不可编辑
+            if limit == '游客':
+                self.ui.tableView.setColumnHidden(self.fldNum['tel_number'], True)
+        self.ui.reload_btn.setEnabled(1)
     def tableWidgetCustomContextMenu(self, pos):
         menu = QMenu(self)
-        show_my_tasks = menu.addAction('查看我的任务')
-        show_all_assets = menu.addAction('查看所有资产')
-        reload = menu.addAction('&F刷新')
-
-        menu2 = QMenu('tttt', menu)
-
-        menu.addMenu(menu2)
-        fuzhi = menu2.addAction('复制')
-        niantie = menu2.addAction('黏贴')
-
-        menu.addSeparator()
-        submit_to_comp = menu.addAction('提交(进)')
-        back_to_previous = menu.addAction('返回(退)')
-        submit_to_back = menu.addAction('提交(反馈)')
-        package_file = menu.addAction('打包文件')
-        menu.addSeparator()
-        edit_selectedItems = menu.addAction('多项修改')
-        submit_selectedItems_to_comp = menu.addAction('多项提交')
-        menu.addSeparator()
-        view_modback = menu.addAction('查看模型反馈')
-        view_shadback = menu.addAction('查看材质反馈')
-        view_rigback = menu.addAction('查看绑定反馈')
-        view_mod_histime = menu.addAction('查看模型历史时间')
-        view_shad_histime = menu.addAction('查看材质历史时间')
-        view_rig_histime = menu.addAction('查看绑定历史时间')
+        fuzhi = menu.addAction('复制')
+        niantie = menu.addAction('黏贴')
 
         # if self.ui.tableView.columnAt(pos.x()) == 0:
         #     show_all_assets111 = menu.addAction('查看看看看')
         action = menu.exec(QCursor.pos())
         item = self.ui.tableView.indexAt(pos)
-        if action is show_my_tasks:
-            selindex = (self.ui.tableView.selectedIndexes())
-            for i in selindex:
-                print(self.tabModel.record(i.row()).value(i.column()))
         if action is fuzhi:
             selindex = (self.ui.tableView.selectedIndexes())
             self.cdata = []
@@ -86,13 +90,14 @@ class Main_Window(QMainWindow):
             if len(self.cdata) == 1 and len(selindex) > 1:
                 for i in selindex:
                     self.tabModel.setData(self.tabModel.index(i.row(), i.column()), self.cdata[0][2])
+                    self.tabModel.submit()
 
             if len(self.cdata) > 0:
                 crow, ccolumn = selindex[0].row(), selindex[0].column()
                 redrownum, redcolumnnum = self.cdata[0][0], self.cdata[0][1]
                 for i in self.cdata:
                     self.tabModel.setData(self.tabModel.index(i[0]+crow-redrownum, i[1]+ccolumn-redcolumnnum), i[2])
-
+                    self.tabModel.submit()
 
 
             #print(self.tabModel.record(item.row()).value(item.column()))
@@ -207,7 +212,7 @@ class Main_Window(QMainWindow):
         #self.tabModel.setTable('sxd_assets')        # 设置数据表
         self.tabModel.setTable('producer_list')  # 设置数据表
         self.ui.tableView.setModel(self.tabModel)
-        self.tabModel.setEditStrategy(QSqlTableModel.OnFieldChange)     # 设置编辑策略 OnFieldChange 字段值变化就立即更新到数据库 OnRowChange(当前行变化更新到数据库)
+        # self.tabModel.setEditStrategy(QSqlTableModel.OnFieldChange)     # 设置编辑策略 OnFieldChange 字段值变化就立即更新到数据库 OnRowChange(当前行变化更新到数据库)
                                                                             # OnManualSubmit(所有修改暂时缓存,需要手动调用submitAll()保存所有修改,或reverAll()取消修改)
         # self.tabModel.setSort(self.tabModel.fieldIndex('id'), Qt.AscendingOrder)    # 排序
         # self.tabModel.setEditStrategy(QSqlTableModel.OnManualSubmit)
@@ -231,30 +236,20 @@ class Main_Window(QMainWindow):
         self.ui.tableView.setModel(self.tabModel)               # 设置数据模型
         self.ui.tableView.setSelectionModel(self.selModel)      # 设置选择模型
 
-
         #self.ui.tableView.setColumnHidden(self.fldNum['department'], True)   # 隐藏列
         #self.ui.tableView.setColumnHidden(self.fldNum['position'], True)
-
-        # strList = ['资产', '动画', '后期', '制片']
-        # self.__delegateDepartment = QmyComboBoxDelegate()
-        # self.__delegateDepartment.setItems(strList, True)
-        # self.ui.tableView.setItemDelegateForColumn(self.fldNum['department'], self.__delegateDepartment)
-        # strList = ['组员', '组长']
-        # self.__delegatePosition = QmyComboBoxDelegate()
-        # self.__delegatePosition.setItems(strList, True)
-        # self.ui.tableView.setItemDelegateForColumn(self.fldNum['position'], self.__delegatePosition)
-
         #print(self.tabModel.record(1).value("tel_number"))
         #self.tabModel.setFilter('department = "资产"')
         #self.tabModel.insertRow(self.tabModel.rowCount(), QModelIndex())
         #self.tabModel.removeRow(20)
-        #self.ui.tableView.resizeColumnsToContents()
+        self.ui.tableView.resizeColumnsToContents()
         self.LabProdNum.setText(' 当前人数: %d 人' % (self.tabModel.rowCount()))
         #self.tabModel.setFilter('department = "%s"'%('资产'))
 
 if __name__ == '__main__':
     app = QApplication([])
-    t = Main_Window()
+    t = myProducerWindow()
+    t.set_limit('游客')
     t.show()
     app.exec()
 

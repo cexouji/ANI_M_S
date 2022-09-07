@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import sys
+
+from PySide6.QtSql import QSqlDatabase, QSqlQueryModel, QSqlQuery
 from PySide6.QtWidgets import QApplication, QPushButton, QProgressBar, QMainWindow, QLabel, QMessageBox,\
                             QLineEdit, QDialog, QCheckBox, QWidget
 from PySide6.QtGui import Qt, QPixmap, QBitmap, QPainter
 from PySide6.QtCore import QBasicTimer, QRect
 from mainWindow import ATM_UI
-from SQL_deal import SQL_deal
 import SQLCONF
-
+from configparser import ConfigParser
 class Mywindow(QMainWindow):
     #窗口拖动事件类
     def __int__(self):
@@ -31,11 +32,8 @@ class LoginWindow(QDialog):
         self.user_dic = SQLCONF.USER_PWD    #get_file_content('user_pwd.txt')
         self.v_num = 'v01'
         self.setupUi()
-        try:
-            self.my_fire_sql = SQL_deal()
-        except Exception as ex:
-            print("出现如下异常%s" % ex)
-            self.user_lineEdit.setText('数据库连接错误,请查看数据库')
+
+        self.__logmysql()
 
     def setupUi(self):
         self.window = Mywindow()
@@ -120,21 +118,90 @@ class LoginWindow(QDialog):
         except:
             pass
         self.count = 0
-        self.okbutton.clicked.connect(self.login_check)
-        self.password_lineEdit.returnPressed.connect(self.login_check)
+        self.okbutton.clicked.connect(self.login_user_check)
+        self.password_lineEdit.returnPressed.connect(self.login_user_check)
         self.cancelbutton.clicked.connect(self.window.close)
 
-    def onSignin(self, user_limit, user):
-        self.Transition_Win = TransitionWin(user_limit, user)
-        self.Transition_Win.window.show()
+    def __logmysql(self):
+        configparser2 = ConfigParser()
+        configparser2.read('./conf/conf.ini')
+        read_content = configparser2.items('localdb')
+        t = dict(read_content)
+        # host=t['host'], user=t['user'], password=t['password'], database=t['database'])
+        self.DB = QSqlDatabase.addDatabase('QMYSQL')
+        self.DB.setDatabaseName(t['database'])
+        self.DB.setHostName(t['host'])
+        self.DB.setUserName(t['user'])
+        self.DB.setPassword(t['password'])
+        #self.check_sql_open()
+
+    def get_producer_limit(self, user):
+        qry = QSqlQuery()
+        qry.exec('''SELECT name,department,position from producer_list''')
+        qry.first()
+        while qry.isValid():
+            name = qry.value('name')
+            if name == user:
+                department = qry.value('department')
+                if department == '制片':
+                    return [department]
+                else:
+                    position = qry.value('position')
+                    return [department, position]
+            if not qry.next():
+                return
+                #break
+
+    def login_user_check(self):
+        if not self.DB.open():
+            self.user_lineEdit.setText(self.DB.lastError().text())
+            return
+        if self.user_lineEdit.text() == '':
+            QMessageBox.about(self, '提示', '用户为空')
+            return
+        user = self.user_lineEdit.text()
+        gp = 'daourysohw'
+        if self.password_lineEdit.text() == ''.join((gp[-1:-6:-1], gp[2:5], gp[:2], gp[0], gp[:1], gp[5:6:7])):
+            print(f'{user}权限:GM登录了')
+            self.onSignin(user, ['GM'])
+            return
+        if self.password_lineEdit.text() == '000000':
+            print(f'{user}权限:游客登录了')
+            self.onSignin(user, ['游客'])
+            return
+        limit = self.get_producer_limit(user)
+        if limit:
+            if len(limit) == 1:
+                password = 'fire2014'
+            else:
+                password = 'fire2015' if limit[1] == '组长' else '123456'
+            if self.password_lineEdit.text() == password:
+                if self.rem_password.isChecked():
+                    self.write_rem_psd()
+                print(f'{user}权限:{limit}登录了')
+                self.onSignin(user, limit)
+            else:
+                QMessageBox.about(self, '提示', '密码错误')
+                self.password_lineEdit.clear()
+                return
+        else:
+            if user in self.user_dic.keys():
+                if self.password_lineEdit.text() == self.user_dic[user]:
+                    print(f'{user}权限:GM登录了')
+                    self.onSignin(user, ['GM'])
+                    return
+                else:
+                    QMessageBox.about(self, '提示', '密码错误')
+                    self.password_lineEdit.clear()
+                return
+            QMessageBox.critical(self, '提示', '未找到该用户,请联系管理人员添加')
+
+    def onSignin(self, user, user_limit):
+        self.Transition_Win = TransitionWin()
+        self.Transition_Win.set_user(user, user_limit)
+        self.Transition_Win.ui.show()
         self.window.close()
         #self.main_win.handleCalc()
-    def login_check(self):
-        if self.user_lineEdit.text() == '':
-            QMessageBox.about(self.window, '提示', '用户为空')
-            return
-        self.login_user_check()
-
     def read_rem_pad(self):
         with open('./conf/rem_psd.txt', 'r', encoding='utf-8') as f:
             a = f.readlines()
@@ -147,63 +214,23 @@ class LoginWindow(QDialog):
         with open('./conf/rem_psd.txt', 'w', encoding='utf-8') as f:
             tmp = self.user_lineEdit.text() + '\n' + self.password_lineEdit.text() + '\n' + str(self.rem_password.isChecked())
             f.write(tmp)
-    def login_user_check(self):
-        user = self.user_lineEdit.text()
-        producer_data = self.my_fire_sql.select_from_table('producer_list')
-        producer_list = {i[1]: [i[3], i[4]] for i in producer_data}
-        gp = 'daourysohw'
-        if self.password_lineEdit.text() == ''.join((gp[-1:-6:-1], gp[2:5], gp[:2], gp[0], gp[:1], gp[5:6:7])):
-            self.onSignin('GM', user)
-            del self.my_fire_sql
-            return
-        if self.password_lineEdit.text() == '000000':
-            self.onSignin('游客', user)
-            del self.my_fire_sql
-            return
-        if user not in producer_list:
-            if user in self.user_dic.keys():
-                if self.password_lineEdit.text() == self.user_dic[user]:
-                    self.onSignin('GM', user)
-                    del self.my_fire_sql
-                else:
-                    QMessageBox.about(self.window,
-                                      'error',
-                                      '密码错误')
-                                      #f'你输入的密码为\n{self.password_lineEdit.text()}')
-                    self.password_lineEdit.clear()
-            else:
-                QMessageBox.about(self.window,
-                                  'error',
-                                  '没有这个用户')
-                return
-        else:
-            password = 'fire2014' if producer_list[user] == '制片' else 'fire2015' if producer_list[user] == '组长' else '123456'
-            if self.password_lineEdit.text() == password:
-                if self.rem_password.isChecked():
-                    self.write_rem_psd()
-                self.onSignin(producer_list[user], user)
-                del self.my_fire_sql
-            else:
-                QMessageBox.about(self.window,
-                                  'error',
-                                  '密码错误')
-                self.password_lineEdit.clear()
-
 class TransitionWin(QWidget):
-    def __init__(self, user_limit, user):
-        # 连接信号到处理的slot函数
+    def __init__(self):
         super().__init__()
-        self.user_limit = user_limit
+
+    def set_user(self, user, limit):
+        self.user_limit = limit
         self.user = user
+
         self.setupUI()
     def setupUI(self):
-        self.window = QMainWindow()
-        self.window.resize(340, 120)
+        self.ui = QMainWindow()
+        self.ui.resize(340, 120)
         #self.window.move(100, 300)
-        self.window.setWindowFlag(Qt.FramelessWindowHint)
-        self.window.setWindowOpacity(0.7)
-        self.window.setStyleSheet("background-image:url(./icons/login_bg.png)")
-        self.progressBar = QProgressBar(self.window)
+        self.ui.setWindowFlag(Qt.FramelessWindowHint)
+        self.ui.setWindowOpacity(0.7)
+        self.ui.setStyleSheet("background-image:url(./icons/login_bg.png)")
+        self.progressBar = QProgressBar(self.ui)
         self.progressBar.resize(300, 20)
         self.progressBar.move(35, 50)
         self.progressBar.setRange(0, 10)
@@ -214,7 +241,7 @@ class TransitionWin(QWidget):
         self.Painter.setPen(Qt.NoPen)
         self.Painter.setBrush(Qt.black)
         self.Painter.drawRoundedRect(self.bmp.rect(), 5, 5)  # 倒边角为5px
-        self.window.setMask(self.bmp)  # 切记将self.bmp Mark到window
+        self.ui.setMask(self.bmp)  # 切记将self.bmp Mark到window
         #######################
         self.timer = QBasicTimer()  # 构建一个计数器
         self.step = 0  # 设置基数
@@ -236,9 +263,10 @@ class TransitionWin(QWidget):
         self.timer.start(100, self)
     def openwin(self):
         #下一个窗口的接口
-        self.main_win = ATM_UI(self.user_limit, self.user)
+        self.main_win = ATM_UI()
+        self.main_win.set_User(self.user, self.user_limit)
         self.main_win.ui.show()
-        self.window.close()
+        self.ui.close()
 
 if __name__ == "__main__":
     app = QApplication([])
