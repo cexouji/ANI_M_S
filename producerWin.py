@@ -50,24 +50,17 @@ class myProducerWindow(QMainWindow):
                 self.ui.tableView.customContextMenuRequested.connect(self.tableWidgetCustomContextMenu)
                 self.tabModel.setEditStrategy(QSqlTableModel.OnFieldChange)     # 设置编辑策略 OnFieldChange 字段值变化就立即更新到数据库 OnRowChange(当前行变化更新到数据库)
                                                                                 # OnManualSubmit(所有修改暂时缓存,需要手动调用submitAll()保存所有修改,或reverAll()取消修改)
-                strList = ['资产', '动画', '后期', '制片']
-                self.__delegateDepartment = QmyComboBoxDelegate()
-                self.__delegateDepartment.setItems(strList, True)
-                self.ui.tableView.setItemDelegateForColumn(self.fldNum['department'], self.__delegateDepartment)
-                strList = ['组员', '组长']
+                strList = ["资产组长", "资产", "动画组长", "动画", "制片"]
                 self.__delegatePosition = QmyComboBoxDelegate()
                 self.__delegatePosition.setItems(strList, True)
                 self.ui.tableView.setItemDelegateForColumn(self.fldNum['position'], self.__delegatePosition)
             # self.ui.tableView.setItemDelegateForColumn(self.fldNum['id'], EmptyDelegate(self))  # 设置不可编辑
         else:
-            if not limit == '制片':
-                self.ui.tableView.setColumnHidden(self.fldNum['department'], True)  # 隐藏列
-                self.ui.tableView.setColumnHidden(self.fldNum['position'], True)
+            if not limit in ['制片', 'GM']:
+                self.ui.tableView.setColumnHidden(self.fldNum['tel_number'], True)
             self.ui.add_producer_btn.setEnabled(0)
             self.ui.delete_producer_btn.setEnabled(0)
             self.ui.tableView.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 所有都为不可编辑
-            if limit == '游客':
-                self.ui.tableView.setColumnHidden(self.fldNum['tel_number'], True)
         self.ui.reload_btn.setEnabled(1)
     def tableWidgetCustomContextMenu(self, pos):
         menu = QMenu(self)
@@ -118,7 +111,6 @@ class myProducerWindow(QMainWindow):
         com_text = self.ui.pos_combox.currentText()
         producer_name = self.ui.name_lineEdit_2.text()
         tel_num = self.ui.tel_lineEdit.text()
-        com_text2 = self.ui.depart_combox.currentText()
         if producer_name:
             if len(tel_num) != 11:
                 QMessageBox.critical(self, '提示', '请查看电话号码是否正确')
@@ -127,13 +119,14 @@ class myProducerWindow(QMainWindow):
             QMessageBox.critical(self, '提示', '请输入名字')
             return
         if self.tabModel.rowCount() == 0:
-            return
-        for i in range(self.tabModel.rowCount()):
-            aRec = self.tabModel.record(i)
-            old_name = aRec.value('name')
-            if producer_name == old_name:
-                QMessageBox.critical(self, '提示', '已经存在该人员,请勿重复添加')
-                return
+            pass
+        else:
+            for i in range(self.tabModel.rowCount()):
+                aRec = self.tabModel.record(i)
+                old_name = aRec.value('name')
+                if producer_name == old_name:
+                    QMessageBox.critical(self, '提示', '已经存在该人员,请勿重复添加')
+                    return
         self.tabModel.insertRow(self.tabModel.rowCount(), QModelIndex())
         curIndex = self.tabModel.index(self.tabModel.rowCount()-1, 1)
         self.selModel.clearSelection()
@@ -142,7 +135,6 @@ class myProducerWindow(QMainWindow):
         self.tabModel.setData(self.tabModel.index(currow, self.fldNum["id"]), self.tabModel.rowCount())
         self.tabModel.setData(self.tabModel.index(currow, self.fldNum["name"]), producer_name)
         self.tabModel.setData(self.tabModel.index(currow, self.fldNum["tel_number"]), tel_num)
-        self.tabModel.setData(self.tabModel.index(currow, self.fldNum["department"]), com_text2)
         self.tabModel.setData(self.tabModel.index(currow, self.fldNum["position"]), com_text)
         if not self.tabModel.submit():
             QMessageBox.critical(self, '提示', '添加失败,请查看是否为编号原因')
@@ -185,11 +177,6 @@ class myProducerWindow(QMainWindow):
             for i in range(self.tabModel.rowCount()):
                 self.ui.tableView.showRow(i)
             self.tabModel.setFilter('')
-    @Slot()
-    def on_depart_combox_currentTextChanged(self):
-        if self.ui.filter_comBox.currentText() == '部门':
-            com_text2 = self.ui.depart_combox.currentText()
-            self.tabModel.setFilter('department = "%s"' % com_text2)
     @Slot()
     def on_pos_combox_currentTextChanged(self):
         if self.ui.filter_comBox.currentText() == '职位':
@@ -249,7 +236,7 @@ class myProducerWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication([])
     t = myProducerWindow()
-    t.set_limit('游客')
+    t.set_limit('GM')
     t.show()
     app.exec()
 

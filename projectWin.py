@@ -3,11 +3,12 @@ import json
 from PySide6.QtSql import QSqlDatabase, QSqlQuery
 from PySide6.QtWidgets import QApplication, QMainWindow, \
     QMessageBox, QFileDialog
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Slot, Signal
 from ui_Project_window import Ui_MainWindow
 from configparser import ConfigParser
 import SQLCONF
 class myProjectWindow(QMainWindow):
+    SENDPROJANDPATH = Signal(str, str, str)
     def __init__(self, parent=None):
         super().__init__(parent)
         self.ui = Ui_MainWindow()
@@ -25,19 +26,47 @@ class myProjectWindow(QMainWindow):
         self.DB.setHostName(t['host'])
         self.DB.setUserName(t['user'])
         self.DB.setPassword(t['password'])
+
+
     def set_edit(self, param):
+        self.ui.drop_table_btn.setEnabled(0)
+        self.ui.checkBox.setChecked(0)
         if param == 'a':
             self.ui.edit_project_btn.setEnabled(0)
             self.ui.add_project_btn.setEnabled(1)
             self.ui.name_lineEdit.setEnabled(1)
+            self.ui.checkBox.setEnabled(0)
+
+            self.reset_projWin()
             self.setWindowTitle('新建项目')
         else:
             self.ui.add_project_btn.setEnabled(0)
             self.ui.edit_project_btn.setEnabled(1)
             self.ui.name_lineEdit.setEnabled(0)
+            self.ui.checkBox.setEnabled(1)
             self.setWindowTitle('编辑项目')
             if self.get_proj_data(param):
                 return 1
+    def reset_projWin(self):
+        self.ui.name_lineEdit.setText('')
+        self.ui.letter_lineEdit.setText('')
+        self.ui.light_leader_lineEdit.setText('')
+        self.ui.ani_leader_lineEdit.setText('')
+        self.ui.asset_leader_lineEdit.setText('')
+        self.ui.manager_lineEdit.setText('')
+        self.ui.design_lineEdit.setText('{letter}:/{proj}_Project/01_documents/design/{type}/{name}')
+        self.ui.backup_lineEdit.setText('{letter}:/{proj}_Project/01_documents/check/{type}/{name}')
+        self.ui.uepath_lineEdit.setText('{letter}:/{proj}_Project/05_UE4/{type}/{name}')
+        self.ui.mayapath_lineEdit.setText('{letter}:/{proj}_Project/03_main_prodution/ep000/assets/{type}/{name}')
+        self.ui.ep_lineEdit_2.setText('ep')
+        self.ui.ctype_lineEdit.setText('characters')
+        self.ui.stype_lineEdit.setText('scenes')
+        self.ui.ptype_lineEdit.setText('props')
+        self.ui.etype_lineEdit.setText('env')
+        self.ui.icon_path_lineEdit.setText('')
+        self.ui.param1_lineEdit.setText('')
+        self.ui.param2_lineEdit.setText('')
+        self.ui.param3_lineEdit.setText('')
     def get_proj_data(self, curproj):
         if not self.DB.open():
             QMessageBox.critical(self, '提示', self.DB.lastError().text())
@@ -127,9 +156,11 @@ class myProjectWindow(QMainWindow):
         qry.prepare('''UPDATE project_list SET project_jsondata=:project_jsondata WHERE project_name=:project_name''')
         qry.bindValue(':project_jsondata', json_data)
         qry.bindValue(':project_name', curproj)
+        self.SENDPROJANDPATH.emit(curproj, self.ui.icon_path_lineEdit.text(), 'edit')
         if not qry.exec():
             QMessageBox.critical(self, '错误', qry.lastError().text())
         else:
+            #self.SENDPROJANDPATH.emit(curproj, self.ui.icon_path_lineEdit.text(), 'add')
             QMessageBox.about(self, '提示', '修改成功')
     @Slot()     # 新建项目
     def on_add_project_btn_clicked(self):
@@ -155,8 +186,9 @@ class myProjectWindow(QMainWindow):
             assets_table_name = f'{curproj}_assets'
             qry.exec('''CREATE TABLE IF NOT EXISTS %s(%s)''' % (assets_table_name, SQLCONF.ASSETS_TABLE_CREATE))
             ani_table_name = f'{curproj}_ani_ep'
-            qry.exec('''CREATE TABLE IF NOT EXISTS %s(%s)''' % (ani_table_name, SQLCONF.ANI_EP_TABLE_CREATE))
-        print('点击了新建项目')
+            qry.exec('''CREATE TABLE IF NOT EXISTS %s(%s)''' % (ani_table_name, SQLCONF.ANI_PROJ_TABLE_CREATE))
+            self.SENDPROJANDPATH.emit(curproj, self.ui.icon_path_lineEdit.text(), 'add')
+        #print('点击了新建项目')
     def get_project_name(self):
         qry = QSqlQuery()
         qry.exec('''SELECT project_name from project_list''')
@@ -216,7 +248,10 @@ class myProjectWindow(QMainWindow):
                 qry.exec('''DROP TABLE %s''' % (assets_table_name))
                 ani_table_name = f'{curproj}_ani_ep'
                 qry.exec('''DROP TABLE %s''' % (ani_table_name))
+                self.SENDPROJANDPATH.emit(curproj, '', 'del')
             print('点击了删除项目')
+
+
         else:
             QMessageBox.critical(self, '提示', f'不存在 {curproj} 该项目')
     @Slot()

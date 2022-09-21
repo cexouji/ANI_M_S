@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
-from PySide6.QtWidgets import QApplication, QMainWindow, QButtonGroup, QFileDialog, QTableWidgetItem, QMenu, QToolButton, QMessageBox, QTreeWidgetItem
-from PySide6.QtCore import Qt, QSize, Slot
+from configparser import ConfigParser
+
+from PySide6.QtSql import QSqlDatabase, QSqlQuery, QSqlTableModel
+from PySide6.QtWidgets import QApplication, QMainWindow, QButtonGroup, QFileDialog, QTableWidgetItem, QMenu, \
+    QToolButton, QMessageBox, QTreeWidgetItem, QLabel, QListWidgetItem, QWidget, QHBoxLayout, QVBoxLayout, QListView, \
+    QAbstractItemView
+from PySide6.QtCore import Qt, QSize, Slot, Signal, QItemSelectionModel, QModelIndex
 from PySide6.QtGui import QIcon, QPixmap, QColor, QCursor
 #from PySide6.QtUiTools import QUiLoader
 from ui_mainProcess_window import Ui_MainWindow
@@ -9,10 +14,31 @@ from SQL_deal import SQL_deal
 from WriteToExcel import write_to_excel
 import datetime
 import json, os
+import SQLCONF
 import package_dir
+from EmptyDelegate import EmptyDelegate
+from QmyComboBoxDelegate import QmyComboBoxDelegate
 
 from projectWin import myProjectWindow
 from producerWin import myProducerWindow
+
+class mycustomListWidgetItem(QListWidgetItem):
+    def __init__(self, name, img):
+        super().__init__()
+        self.wight = QWidget()
+        self.label = QLabel(name)
+        self.label.setAlignment(Qt.AlignHCenter)
+        self.picture = QLabel()  # 头像显示
+        self.picture.setAlignment(Qt.AlignHCenter)
+        self.picture.setPixmap(QPixmap(img).scaled(80, 80))
+
+        hlayout = QVBoxLayout()
+        hlayout.addWidget(self.picture)
+        hlayout.addWidget(self.label)
+        #hlayout.addStretch(1)
+        hlayout.setContentsMargins(3, 3, 3, 3)
+        self.wight.setLayout(hlayout)
+        self.setSizeHint(self.wight.sizeHint())
 
 class ATM_UI(QMainWindow):
     def __init__(self, parent=None):
@@ -22,42 +48,392 @@ class ATM_UI(QMainWindow):
 
         self.__producerWin = None
         self.__projectWin = None
+        self.curProj = None
+        self.__logmysql()
         self.setWindowTitle('资产任务分配管理窗口')
+        self.ui.actEditProj.setEnabled(0)
 
+
+        self.ui.tableView3.setSelectionBehavior(QAbstractItemView.SelectItems)
+        # self.ui.tableView3.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.ui.tableView3.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.ui.tableView3.setAlternatingRowColors(True)
+        #self.ui.tableView3.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 所有都为不可编辑
+
+
+        # self.pic_label = QLabel(self)
+        # self.pic_label.setPixmap(QPixmap(r'D:\PycharmProjects\pythonProject\ANI_M_S\project_icon\项目1.jpg'))
+        # icon = QIcon(r'D:\PycharmProjects\pythonProject\ANI_M_S\project_icon\项目1.jpg')
+        #pic_label.setFixedSize(80, 80)
+        #self.ui.listWidget.setViewMode(QListView.IconMode)
+        #self.ui.listWidget.setFlow(QListView.TopToBottom)  # 上往下 而不是往右
+        #self.ui.listWidget.setResizeMode(QListView.Adjust)
+        self.ui.listWidget.setStyleSheet('background-color:transparent')
+        self.ui.listWidget.currentItemChanged.connect(self.setCurProj)
+        # item1 = QListWidgetItem('sxd')
+        # item1.setIcon(icon)
+        # self.ui.listWidget.addItem(item1)
+        # item2 = QListWidgetItem('ssss')
+        # item2.setIcon(icon)
+        # self.ui.listWidget.addItem(item2)
+
+        # dict1 = {'SXD' : r'D:\PycharmProjects\pythonProject\ANI_M_S\project_icon\项目1.jpg',
+        #          'SDP' : r'D:\PycharmProjects\pythonProject\ANI_M_S\project_icon\项目2.jpg'}
+        # #img = r'D:\PycharmProjects\pythonProject\ANI_M_S\project_icon\项目1.jpg'
+        # for i in dict1:
+        #     item1 = mycustomListWidgetItem(i, dict1[i])
+        #     self.ui.listWidget.addItem(item1)
+        #     self.ui.listWidget.setItemWidget(item1, item1.wight)
+        # self.ui.listWidget.currentItemChanged.connect(self.setCurProj)
         #self.DD_send = SMGDD.SEND_MSG()  # 钉钉消息
 
+    def list_proj_icon(self):
+        if not self.DB.open():
+            QMessageBox.critical(self, '提示', self.DB.lastError().text())
+            return
+        qry = QSqlQuery(self.DB)
+        qry.exec('''SELECT * from project_list''')
+        qry.first()
+        while qry.isValid():  # id project_name  project_jsondata
+            proj_name = qry.value('project_name')
+            pro_jsondata = json.loads(qry.value('project_jsondata'))
+            proj_icon_path = pro_jsondata["icon_path"]
+            self.add_proj_icon(proj_name, proj_icon_path)
+            if not qry.next():
+                break
+    def add_proj_icon(self, proj_name, proj_icon_path):
+        item1 = mycustomListWidgetItem(proj_name, proj_icon_path)
+        self.ui.listWidget.addItem(item1)
+        self.ui.listWidget.setItemWidget(item1, item1.wight)
+    def setCurProj(self, item):
+        self.curProj = item.label.text()
+        if self.limit[0] == 'GM':
+            self.ui.actEditProj.setEnabled(1)
+        #print(self.curProj)
+        #print(self.ui.listWidget.itemWidget().text())
     def set_User(self, user, limit):
         self.user = user
         self.limit = limit
-
+        if not limit[0] == 'GM':
+            self.ui.actCreateProj.setEnabled(0)
+        self.ui.actEditProj.setEnabled(0)
+        #print(self.user, self.limit)
         # self.__connect_set()  # connect设置
+        self.__limit_set()
+        self.list_proj_icon()
         # self.__init_param()  # 设置一些参数的初始值
+    def __limit_set(self):
+        if self.limit[0] in ['GM', '制片']:
+            self.ui.reload_btn1.setEnabled(1)
+            self.ui.reload_btn2.setEnabled(1)
+            self.ui.reload_btn3.setEnabled(1)
+            self.ui.reload_btn4.setEnabled(1)
+        elif self.limit[0] == '动画':
+            self.ui.reload_btn2.setEnabled(1)
+            self.ui.reload_btn4.setEnabled(1)
+            if self.limit[1] == '组长':
+                self.ui.reload_btn3.setEnabled(1)
+            else:
+                pass
+        elif self.limit[0] == '资产':
+            self.ui.reload_btn1.setEnabled(1)
+            if self.limit[1] == '组长':
+                pass
+            else:
+                pass
+        elif self.limit[0] == '游客':
+            pass
+
+    def __logmysql(self):
+        configparser2 = ConfigParser()
+        configparser2.read('./conf/conf.ini')
+        read_content = configparser2.items('localdb')
+        t = dict(read_content)
+        self.DB = QSqlDatabase.addDatabase('QMYSQL')
+        self.DB.setDatabaseName(t['database'])
+        self.DB.setHostName(t['host'])
+        self.DB.setUserName(t['user'])
+        self.DB.setPassword(t['password'])
+    def get_ani_ep_table(self, curproj, curep):
+        sc_ep = "%03d" % curep
+        return(f'{curproj}_ani_ep{sc_ep}_table')
     @Slot()
     def on_actCreateProj_triggered(self):
-        print('点击了创建项目')
+        #print('点击了创建项目')
         if self.__projectWin == None:
             self.__projectWin = myProjectWindow(self)
+            self.__projectWin.SENDPROJANDPATH.connect(self.FOOTEST)
         self.__projectWin.set_edit('a')
         self.__projectWin.show()
-
     @Slot()
     def on_actEditProj_triggered(self):
-        print('点击了编辑项目')
+        #print('点击了编辑项目')
         if self.__projectWin == None:
             self.__projectWin = myProjectWindow(self)
-        if not self.__projectWin.set_edit('SXD'):
-            self.__projectWin.show()
+            self.__projectWin.SENDPROJANDPATH.connect(self.FOOTEST)
+        if self.curProj:
+            if not self.__projectWin.set_edit(self.curProj):
+                self.__projectWin.show()
+        else:
+            QMessageBox.critical(self, '错误', '请先选择项目')
     @Slot()
     def on_actProducer_triggered(self):
-        print('点击了人员名单')
+        #print('点击了人员名单')
         if self.__producerWin == None:
             self.__producerWin = myProducerWindow(self)
-            self.__producerWin.set_limit('GM')
+            self.__producerWin.set_limit(self.limit[0])
         self.__producerWin.show()
-        #producer_Win = myProducerWindow(self)
-        #producer_Win.set_limit('GM')
+    def FOOTEST(self, proj, iconpath, sign):
+        if sign == 'edit':
+            if proj == self.ui.listWidget.currentItem().label.text():
+                self.ui.listWidget.currentItem().picture.setPixmap(QPixmap(iconpath).scaled(80, 80))
+            else:
+                for i in range(self.ui.listWidget.count()):
+                    if proj == self.ui.listWidget.item(i).label.text():
+                        self.ui.listWidget.item(i).picture.setPixmap(QPixmap(iconpath).scaled(80, 80))
+                print('选择的项目不同')
+        elif sign == 'add':
+            self.add_proj_icon(proj, iconpath)
+        elif sign == 'del':
+            if proj == self.ui.listWidget.currentItem().label.text():
+                item_row = self.ui.listWidget.row(self.ui.listWidget.currentItem())
+                self.ui.listWidget.removeItemWidget(self.ui.listWidget.takeItem(item_row))
+            else:
+                print(self.ui.listWidget.count())
+                for i in range(self.ui.listWidget.count()):
+                    if proj == self.ui.listWidget.item(i).label.text():
+                        #item_row = self.ui.listWidget.row(self.ui.listWidget.currentItem())
+                        self.ui.listWidget.removeItemWidget(self.ui.listWidget.takeItem(i))
 
-        #producer_Win.show()
+        else:
+            pass
+
+    #################################################################################################################
+    @Slot()
+    def on_reload_btn1_clicked(self):
+        self.ui.cproj_lb1.setText(self.curProj)
+
+    #################################################################################################################
+    @Slot()
+    def on_reload_btn2_clicked(self):
+        self.ui.cproj_lb2.setText(self.curProj)
+        self.openTable2()
+
+        self.ui.path_cbob2.setEnabled(1)
+        self.ui.openpath_btn2.setEnabled(1)
+        if self.limit[0] in ['GM', '制片']:
+            pass
+        elif self.limit[0] == '动画':
+            if self.limit[1] == '组员':
+                self.ui.tableView2.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 所有都为不可编辑
+                return
+        self.ui.edit_line2.setEnabled(1)
+        self.ui.addshot_btn2.setEnabled(1)
+        self.ui.insertshot_btn2.setEnabled(1)
+        self.ui.delsel_btn2.setEnabled(1)
+        self.ui.importshot_btn2.setEnabled(1)
+
+    @Slot()
+    def on_addshot_btn2_clicked(self):
+        self.tabModel2.insertRow(self.tabModel2.rowCount(), QModelIndex())
+        curIndex = self.tabModel2.index(self.tabModel2.rowCount() - 1, 1)
+        self.selModel2.clearSelection()
+        self.selModel2.setCurrentIndex(curIndex, QItemSelectionModel.Select)
+        currow = curIndex.row()
+        shot = self.ui.shot_line2.text()
+        frame = self.ui.frame_line2.text()
+        secend = self.ui.secend_line2.text()
+        scene = self.ui.scene_line2.text()
+        ctime = self.ui.t_lineEdit2.text()
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['shotnum']), shot)
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['frame']), frame)
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['second']), secend)
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['scenes']), scene)
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['curtime']), ctime)
+        self.tabModel2.submit()
+
+    @Slot()
+    def on_insertshot_btn2_clicked(self):
+        # 插入行
+        curIndex = self.ui.tableView2.currentIndex()
+        self.tabModel2.insertRow(curIndex.row(), QModelIndex())
+        self.selModel2.clearSelection()
+        self.selModel2.setCurrentIndex(curIndex, QItemSelectionModel.Select)
+        currow = curIndex.row()
+        shot = self.ui.shot_line2.text()
+        frame = self.ui.frame_line2.text()
+        secend = self.ui.secend_line2.text()
+        scene = self.ui.scene_line2.text()
+        ctime = self.ui.t_lineEdit2.text()
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['shotnum']), shot)
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['frame']), frame)
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['second']), secend)
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['scenes']), scene)
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['curtime']), ctime)
+        self.tabModel2.submit()
+
+    @Slot()
+    def on_delsel_btn2_clicked(self):
+        # 删除行
+        curIndex = self.selModel2.currentIndex()
+        self.tabModel2.removeRow(curIndex.row())
+
+
+    def getFieldNames2(self):  # 获取所有字段名称
+        emptyRec = self.tabModel2.record()  # 获取空记录, 只有字段名
+        self.fldNum2 = {}
+        for i in range(emptyRec.count()):
+            fieldName = emptyRec.fieldName(i)  # 字段名
+            self.fldNum2.setdefault(fieldName)
+            self.fldNum2[fieldName] = i
+        # print(self.fldNum)      # 显示标题字典数据
+
+    def openTable2(self):
+        self.tabModel2 = QSqlTableModel(self, self.DB)  # 数据模型
+        curep = self.ui.ep_sp2.value()
+        curproj = self.ui.cproj_lb2.text()
+        if curproj == '当前项目':
+            QMessageBox.critical(self, '错误', '请确认当前项目')
+            return
+        if not curep:
+            return
+        assets_table_name = self.get_ani_ep_table(curproj, curep)
+        self.tabModel2.setTable(assets_table_name)  # 设置数据表
+        self.ui.tableView2.setModel(self.tabModel2)
+        self.tabModel2.setEditStrategy(QSqlTableModel.OnFieldChange)
+        # self.tabModel2.setSort(self.tabModel3.fieldIndex('id'), Qt.AscendingOrder)    # 排序
+        # self.ui.tableView2.setItemDelegateForColumn(0, EmptyDelegate(self))  # 某列设置不可编辑
+        # strList = ['待制作', '制作中', 'OK']
+        # self.__delegateDepartment = QmyComboBoxDelegate()
+        # self.__delegateDepartment.setItems(strList, True)
+        # self.ui.tableView2.setItemDelegateForColumn(4, self.__delegateDepartment)
+        # self.ui.tableView2.setItemDelegateForColumn(5, self.__delegateDepartment)
+        # self.ui.tableView2.setItemDelegateForColumn(6, self.__delegateDepartment)
+        self.ui.tableView2.verticalHeader().setVisible(False)  # 隐藏表头
+        if self.tabModel2.select() == False:  # 查询数据失败
+            QMessageBox.critical(self, '查询数据失败', '打开数据表错误,出错消息\n' + self.tabModel2.lastError().text())
+            return
+        self.getFieldNames2()
+        headerlist = ['id', '镜头号', '帧数', '秒数', 'LY制作人员', '时态', '场景', 'AN制作人员', 'AN完成时间', '通过状态',
+                      'MA上传情况', '起始帧数', '末尾帧', '备注']
+        for num, i in enumerate(self.fldNum2):
+            self.tabModel2.setHeaderData(self.fldNum2[i], Qt.Horizontal, headerlist[num])
+        self.selModel2 = QItemSelectionModel(self.tabModel2)  # 选择模型
+        # self.selModel2.currentChanged.connect(self.do_currentChanged)
+        # self.selModel2.currentRowChanged.connect(self.do_currentRowChanged)
+        self.ui.tableView2.setModel(self.tabModel2)  # 设置数据模型
+        self.ui.tableView2.setSelectionModel(self.selModel2)  # 设置选择模型
+        # self.ui.tableView2.setColumnHidden(self.fldNum['department'], True)   # 隐藏列
+        self.ui.tableView2.resizeColumnsToContents()
+
+    #################################################################################################################
+    @Slot()             # 第三页
+    def on_reload_btn3_clicked(self):
+        self.ui.cproj_lb3.setText(self.curProj)
+        self.ui.new_ep_btn3.setEnabled(1)
+        self.ui.delline_btn3.setEnabled(1)
+        self.ui.insertline_btn3.setEnabled(1)
+        self.ui.addline_btn3.setEnabled(1)
+        self.openTable3()
+    @Slot()
+    def on_addline_btn3_clicked(self):
+        self.tabModel3.insertRow(self.tabModel3.rowCount(), QModelIndex())
+        curIndex = self.tabModel3.index(self.tabModel3.rowCount()-1, 1)
+        self.selModel3.clearSelection()
+        self.selModel3.setCurrentIndex(curIndex, QItemSelectionModel.Select)
+        # currow = curIndex.row()
+        # self.tabModel3.setData(self.tabModel3.index(currow, 0), self.tabModel3.rowCount())
+    @Slot()
+    def on_insertline_btn3_clicked(self):
+        # 插入行
+        curIndex = self.ui.tableView3.currentIndex()
+        self.tabModel3.insertRow(curIndex.row(), QModelIndex())
+        self.selModel3.clearSelection()
+        self.selModel3.setCurrentIndex(curIndex, QItemSelectionModel.Select)
+    @Slot()
+    def on_delline_btn3_clicked(self):
+        # 删除行
+        curIndex = self.selModel3.currentIndex()
+        self.tabModel3.removeRow(curIndex.row())
+    @Slot()
+    def on_new_ep_btn3_clicked(self):
+        curep = self.ui.ep_sp3.value()
+        curproj = self.ui.cproj_lb3.text()
+        if curproj == '当前项目':
+            QMessageBox.critical(self, '错误', '请确认当前项目')
+            return
+        if curep:
+            # sc_ep = curep.rjust(3, '0')
+            # sc_ep = "%03d" % curep
+            assets_table_name = self.get_ani_ep_table(curproj, curep)
+            qry = QSqlQuery(self.DB)
+            qry.exec('''show tables''')
+            qry.first()
+            while qry.isValid():
+                if qry.value(0).upper() == assets_table_name.upper():
+                    QMessageBox.critical(self, '错误', '已有该分集表格')
+                    return
+                if not qry.next():
+                    break
+            qry.prepare('''CREATE TABLE IF NOT EXISTS %s(%s)''' % (assets_table_name, SQLCONF.ANI_EP_TABLE_CREATE))
+            if not qry.exec():
+                QMessageBox.critical(self, '错误', 'error:' + qry.lastError().text())
+            else:
+                QMessageBox.critical(self, '提示', '创建分集表成功')
+        else:
+            QMessageBox.critical(self, '提示', '请输入集数')
+
+    def getFieldNames3(self):      # 获取所有字段名称
+        emptyRec = self.tabModel3.record()       # 获取空记录, 只有字段名
+        self.fldNum3 = {}
+        for i in range(emptyRec.count()):
+            fieldName = emptyRec.fieldName(i)   # 字段名
+            self.fldNum3.setdefault(fieldName)
+            self.fldNum3[fieldName] = i
+        #print(self.fldNum)      # 显示标题字典数据
+    def openTable3(self):
+        self.tabModel3 = QSqlTableModel(self, self.DB)    #数据模型
+        self.tabModel3.setTable(f'{self.ui.cproj_lb3.text()}_ani_ep')  # 设置数据表
+        self.ui.tableView3.setModel(self.tabModel3)
+        self.tabModel3.setEditStrategy(QSqlTableModel.OnFieldChange)     # 设置编辑策略 OnFieldChange 字段值变化就立即更新到数据库 OnRowChange(当前行变化更新到数据库)
+        # OnManualSubmit(所有修改暂时缓存,需要手动调用submitAll()保存所有修改,或reverAll()取消修改)
+        # self.tabModel3.setSort(self.tabModel3.fieldIndex('id'), Qt.AscendingOrder)    # 排序
+        #self.ui.tableView3.setItemDelegateForColumn(0, EmptyDelegate(self))  # 设置不可编辑
+        strList = ['待制作', '制作中', 'OK']
+        self.__delegateDepartment = QmyComboBoxDelegate()
+        self.__delegateDepartment.setItems(strList, True)
+        self.ui.tableView3.setItemDelegateForColumn(4, self.__delegateDepartment)
+        self.ui.tableView3.setItemDelegateForColumn(5, self.__delegateDepartment)
+        self.ui.tableView3.setItemDelegateForColumn(6, self.__delegateDepartment)
+
+        self.ui.tableView3.verticalHeader().setVisible(False)    # 隐藏表头
+        if self.tabModel3.select() == False:   # 查询数据失败
+            QMessageBox.critical(self, '查询数据失败', '打开数据表错误,出错消息\n'+self.tabModel3.lastError().text())
+            return
+        self.getFieldNames3()
+        headerlist = ['序号', '剧集', '名称', '制作方', '分镜进度', '资产进度', '动画进度', '负责人']
+        for num, i in enumerate(self.fldNum3):
+            self.tabModel3.setHeaderData(self.fldNum3[i], Qt.Horizontal, headerlist[num])
+        self.selModel3 = QItemSelectionModel(self.tabModel3)  # 选择模型
+        # self.selModel3.currentChanged.connect(self.do_currentChanged)
+        # self.selModel3.currentRowChanged.connect(self.do_currentRowChanged)
+        self.ui.tableView3.setModel(self.tabModel3)               # 设置数据模型
+        self.ui.tableView3.setSelectionModel(self.selModel3)      # 设置选择模型
+        #self.ui.tableView3.setColumnHidden(self.fldNum['department'], True)   # 隐藏列
+        self.ui.tableView3.resizeColumnsToContents()
+
+    #################################################################################################################
+    @Slot()
+    def on_reload_btn4_clicked(self):
+        self.ui.cproj_lb4.setText(self.curProj)
+
+
+
+
+
+
+
+#print(self.ui.listWidget.currentItem())
 
 
 
@@ -1142,6 +1518,6 @@ class ATM_UI(QMainWindow):
 if __name__ == "__main__":
     app = QApplication([])
     Asset_Managenment = ATM_UI()
-    Asset_Managenment.set_User('制片', '张')
+    Asset_Managenment.set_User('张', ['GM', '组长'])
     Asset_Managenment.show()
     app.exec()
