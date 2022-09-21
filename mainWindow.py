@@ -107,14 +107,14 @@ class ATM_UI(QMainWindow):
         self.ui.listWidget.setItemWidget(item1, item1.wight)
     def setCurProj(self, item):
         self.curProj = item.label.text()
-        if self.limit[0] == 'GM':
+        if self.limit == 'GM':
             self.ui.actEditProj.setEnabled(1)
         #print(self.curProj)
         #print(self.ui.listWidget.itemWidget().text())
     def set_User(self, user, limit):
         self.user = user
         self.limit = limit
-        if not limit[0] == 'GM':
+        if not limit == 'GM':
             self.ui.actCreateProj.setEnabled(0)
         self.ui.actEditProj.setEnabled(0)
         #print(self.user, self.limit)
@@ -123,25 +123,25 @@ class ATM_UI(QMainWindow):
         self.list_proj_icon()
         # self.__init_param()  # 设置一些参数的初始值
     def __limit_set(self):
-        if self.limit[0] in ['GM', '制片']:
+        if self.limit in ['GM', '制片']:
             self.ui.reload_btn1.setEnabled(1)
             self.ui.reload_btn2.setEnabled(1)
             self.ui.reload_btn3.setEnabled(1)
             self.ui.reload_btn4.setEnabled(1)
-        elif self.limit[0] == '动画':
+        elif '动画' in self.limit:
             self.ui.reload_btn2.setEnabled(1)
             self.ui.reload_btn4.setEnabled(1)
-            if self.limit[1] == '组长':
+            if self.limit == '动画组长':
                 self.ui.reload_btn3.setEnabled(1)
             else:
                 pass
-        elif self.limit[0] == '资产':
+        elif '资产' in self.limit:
             self.ui.reload_btn1.setEnabled(1)
-            if self.limit[1] == '组长':
+            if self.limit == '资产组长':
                 pass
             else:
                 pass
-        elif self.limit[0] == '游客':
+        elif self.limit == '游客':
             pass
 
     def __logmysql(self):
@@ -181,7 +181,7 @@ class ATM_UI(QMainWindow):
         #print('点击了人员名单')
         if self.__producerWin == None:
             self.__producerWin = myProducerWindow(self)
-            self.__producerWin.set_limit(self.limit[0])
+            self.__producerWin.set_limit(self.limit)
         self.__producerWin.show()
     def FOOTEST(self, proj, iconpath, sign):
         if sign == 'edit':
@@ -221,15 +221,14 @@ class ATM_UI(QMainWindow):
 
         self.ui.path_cbob2.setEnabled(1)
         self.ui.openpath_btn2.setEnabled(1)
-        if self.limit[0] in ['GM', '制片']:
+        if self.limit in ['GM', '制片']:
             pass
-        elif self.limit[0] == '动画':
-            if self.limit[1] == '组员':
+        elif self.limit == '动画组长':
+            if self.limit == '动画':
                 self.ui.tableView2.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 所有都为不可编辑
                 return
         self.ui.edit_line2.setEnabled(1)
         self.ui.addshot_btn2.setEnabled(1)
-        self.ui.insertshot_btn2.setEnabled(1)
         self.ui.delsel_btn2.setEnabled(1)
         self.ui.importshot_btn2.setEnabled(1)
 
@@ -241,31 +240,18 @@ class ATM_UI(QMainWindow):
         self.selModel2.setCurrentIndex(curIndex, QItemSelectionModel.Select)
         currow = curIndex.row()
         shot = self.ui.shot_line2.text()
+        if not shot:
+            QMessageBox.critical(self, '错误', '请输入镜头号')
+            return
+        if shot.isdigit():
+            newshot = 'sc%03d' % int(shot)
+        else:
+            newshot = f'sc{shot.rjust(4, "0")}'
         frame = self.ui.frame_line2.text()
         secend = self.ui.secend_line2.text()
         scene = self.ui.scene_line2.text()
         ctime = self.ui.t_lineEdit2.text()
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['shotnum']), shot)
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['frame']), frame)
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['second']), secend)
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['scenes']), scene)
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['curtime']), ctime)
-        self.tabModel2.submit()
-
-    @Slot()
-    def on_insertshot_btn2_clicked(self):
-        # 插入行
-        curIndex = self.ui.tableView2.currentIndex()
-        self.tabModel2.insertRow(curIndex.row(), QModelIndex())
-        self.selModel2.clearSelection()
-        self.selModel2.setCurrentIndex(curIndex, QItemSelectionModel.Select)
-        currow = curIndex.row()
-        shot = self.ui.shot_line2.text()
-        frame = self.ui.frame_line2.text()
-        secend = self.ui.secend_line2.text()
-        scene = self.ui.scene_line2.text()
-        ctime = self.ui.t_lineEdit2.text()
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['shotnum']), shot)
+        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['shotnum']), newshot)
         self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['frame']), frame)
         self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['second']), secend)
         self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['scenes']), scene)
@@ -299,6 +285,8 @@ class ATM_UI(QMainWindow):
             return
         assets_table_name = self.get_ani_ep_table(curproj, curep)
         self.tabModel2.setTable(assets_table_name)  # 设置数据表
+        self.tabModel2.setSort(1, Qt.AscendingOrder)
+        #self.tabModel2.setFilter("ly_prod like '%张%' and curtime like '%天%' and scenes like '%这%'")   # filter 筛选模式
         self.ui.tableView2.setModel(self.tabModel2)
         self.tabModel2.setEditStrategy(QSqlTableModel.OnFieldChange)
         # self.tabModel2.setSort(self.tabModel3.fieldIndex('id'), Qt.AscendingOrder)    # 排序
@@ -1518,6 +1506,6 @@ class ATM_UI(QMainWindow):
 if __name__ == "__main__":
     app = QApplication([])
     Asset_Managenment = ATM_UI()
-    Asset_Managenment.set_User('张', ['GM', '组长'])
+    Asset_Managenment.set_User('张', 'GM')
     Asset_Managenment.show()
     app.exec()

@@ -163,11 +163,11 @@ class LoginWindow(QDialog):
         gp = 'daourysohw'
         if self.password_lineEdit.text() == ''.join((gp[-1:-6:-1], gp[2:5], gp[:2], gp[0], gp[:1], gp[5:6:7])):
             print(f'{user}权限:GM登录了')
-            self.onSignin(user, ['GM'])
+            self.onSignin(user, 'GM')
             return
         if self.password_lineEdit.text() == '000000':
             print(f'{user}权限:游客登录了')
-            self.onSignin(user, ['游客'])
+            self.onSignin(user, '游客')
             return
         limit = self.get_producer_limit(user)
         if limit:
@@ -188,7 +188,7 @@ class LoginWindow(QDialog):
             if user in self.user_dic.keys():
                 if self.password_lineEdit.text() == self.user_dic[user]:
                     print(f'{user}权限:GM登录了')
-                    self.onSignin(user, ['GM'])
+                    self.onSignin(user, 'GM')
                     return
                 else:
                     QMessageBox.about(self, '提示', '密码错误')
@@ -217,11 +217,9 @@ class LoginWindow(QDialog):
 class TransitionWin(QWidget):
     def __init__(self):
         super().__init__()
-
     def set_user(self, user, limit):
         self.user_limit = limit
         self.user = user
-
         self.setupUI()
     def setupUI(self):
         self.ui = QMainWindow()
@@ -265,7 +263,7 @@ class TransitionWin(QWidget):
         #下一个窗口的接口
         self.main_win = ATM_UI()
         self.main_win.set_User(self.user, self.user_limit)
-        self.main_win.ui.show()
+        self.main_win.show()
         self.ui.close()
 
 if __name__ == "__main__":

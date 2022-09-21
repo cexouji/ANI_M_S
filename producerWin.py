@@ -160,16 +160,8 @@ class myProducerWindow(QMainWindow):
         if self.ui.filter_comBox.currentText() == '姓名':
             producer_name = self.ui.name_lineEdit_2.text()
             if producer_name:
-                for i in range(self.tabModel.rowCount()):
-                    aRec = self.tabModel.record(i)
-                    old_name = aRec.value('name')
-                    if producer_name in old_name:
-                        self.ui.tableView.showRow(i)
-                    else:
-                        self.ui.tableView.hideRow(i)
+                self.tabModel.setFilter(f'name like "%{producer_name}%"')
             else:
-                for i in range(self.tabModel.rowCount()):
-                    self.ui.tableView.showRow(i)
                 self.tabModel.setFilter('')
     @Slot()
     def on_filter_comBox_currentTextChanged(self):
