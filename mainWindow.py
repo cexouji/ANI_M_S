@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from configparser import ConfigParser
 
+from PySide6 import QtCore
 from PySide6.QtSql import QSqlDatabase, QSqlQuery, QSqlTableModel
 from PySide6.QtWidgets import QApplication, QMainWindow, QButtonGroup, QFileDialog, QTableWidgetItem, QMenu, \
     QToolButton, QMessageBox, QTreeWidgetItem, QLabel, QListWidgetItem, QWidget, QHBoxLayout, QVBoxLayout, QListView, \
@@ -146,6 +147,58 @@ class ATM_UI(QMainWindow):
         elif self.limit == '游客':
             pass
 
+        if self.limit == 'GM':
+            self.ui.tableView2.setContextMenuPolicy(Qt.CustomContextMenu)  # 开启自定义菜单 (继承自 QWidget)
+            self.ui.tableView2.customContextMenuRequested.connect(self.tableWidgetCustomContextMenu2)
+
+    def tableWidgetCustomContextMenu2(self, pos):
+        menu = QMenu(self)
+        fuzhi = menu.addAction('复制')
+        niantie = menu.addAction('黏贴')
+        shaixuan = menu.addAction('当前筛选')
+        shaixuanquxiao = menu.addAction('取消筛选')
+
+        # if self.ui.tableView.columnAt(pos.x()) == 0:
+        #     show_all_assets111 = menu.addAction('查看看看看')
+        action = menu.exec(QCursor.pos())
+        item = self.ui.tableView2.indexAt(pos)
+        if action is fuzhi:
+            selindex = (self.ui.tableView2.selectedIndexes())
+            self.cdata = []
+            for i in selindex:
+                # print(self.tabModel.record(i.row()).value(i.column()))
+                self.cdata.append([i.row(), i.column(), self.tabModel2.record(i.row()).value(i.column())])
+            print(self.cdata)
+        elif action is niantie:
+            selindex = self.ui.tableView2.selectedIndexes()
+            if len(self.cdata) == 1 and len(selindex) > 1:
+                for i in selindex:
+                    self.tabModel2.setData(self.tabModel2.index(i.row(), i.column()), self.cdata[0][2])
+                    self.tabModel2.submit()
+            if len(self.cdata) > 0:
+                crow, ccolumn = selindex[0].row(), selindex[0].column()
+                redrownum, redcolumnnum = self.cdata[0][0], self.cdata[0][1]
+                for i in self.cdata:
+                    self.tabModel2.setData(self.tabModel2.index(i[0] + crow - redrownum, i[1] + ccolumn - redcolumnnum), i[2])
+                    self.tabModel2.submit()
+        elif action is shaixuan:
+            selindex = self.ui.tableView2.selectedIndexes()
+            for i in selindex:
+                for j in self.fldNum2.keys():
+                    if self.fldNum2[j] == i.column():
+                        c_value = self.tabModel2.record(i.row()).value(i.column())
+                        if isinstance(c_value, QtCore.QDate):
+                            QMessageBox.critical(self, '提示', '不能根据日期筛选')
+                            break
+                        self.tabModel2.setFilter(f"{j} = '{c_value}'")
+                        break
+                break
+                # self.tabModel2.setFilter("ly_prod like '%张%' and curtime like '%天%' and scenes like '%这%'")   # filter 筛选模式
+        elif action is shaixuanquxiao:
+            self.tabModel2.setFilter('')
+        else:
+            pass
+
     def __logmysql(self):
         configparser2 = ConfigParser()
         configparser2.read('./conf/conf.ini')
@@ -239,7 +292,6 @@ class ATM_UI(QMainWindow):
     def on_addshot_btn2_clicked(self):
         shot = self.ui.shot_line2.text()
         frame = self.ui.frame_line2.text()
-        secend = self.ui.secend_line2.text()
         scene = self.ui.scene_line2.text()
         ctime = self.ui.t_lineEdit2.text()
         newshot = []
@@ -262,7 +314,6 @@ class ATM_UI(QMainWindow):
             currow = curIndex.row()
             self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['shotnum']), j)
             self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['frame']), frame) if frame else 0
-            self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['second']), secend) if secend else 0
             self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['scenes']), scene) if scene else 0
             self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['curtime']), ctime) if ctime else 0
             self.tabModel2.submit()
@@ -315,7 +366,7 @@ class ATM_UI(QMainWindow):
             QMessageBox.critical(self, '查询数据失败', '打开数据表错误,出错消息\n' + self.tabModel2.lastError().text())
             return
         self.getFieldNames2()
-        headerlist = ['id', '镜头号', '帧数', '秒数', 'LY制作人员', '时态', '场景', 'AN制作人员', 'AN完成时间', '通过状态',
+        headerlist = ['id', '镜头号', '帧数', 'LY制作人员', '时态', '场景', 'AN制作人员', 'AN完成时间', '通过状态',
                       'MA上传情况', '起始帧数', '末尾帧', '备注']
         for num, i in enumerate(self.fldNum2):
             self.tabModel2.setHeaderData(self.fldNum2[i], Qt.Horizontal, headerlist[num])
@@ -382,7 +433,7 @@ class ATM_UI(QMainWindow):
             if not qry.exec():
                 QMessageBox.critical(self, '错误', 'error:' + qry.lastError().text())
             else:
-                QMessageBox.critical(self, '提示', '创建分集表成功')
+                QMessageBox.about(self, '提示', '创建分集表成功')
         else:
             QMessageBox.critical(self, '提示', '请输入集数')
 
