@@ -59,7 +59,9 @@ class ATM_UI(QMainWindow):
         self.ui.tableView3.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.ui.tableView3.setAlternatingRowColors(True)
         #self.ui.tableView3.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 所有都为不可编辑
+        self.ui.tableView2.setSortingEnabled(1)     # 表头排序
 
+        self.ui.tableView3.setSortingEnabled(1)
 
         # self.pic_label = QLabel(self)
         # self.pic_label.setPixmap(QPixmap(r'D:\PycharmProjects\pythonProject\ANI_M_S\project_icon\项目1.jpg'))
@@ -222,7 +224,8 @@ class ATM_UI(QMainWindow):
         self.ui.path_cbob2.setEnabled(1)
         self.ui.openpath_btn2.setEnabled(1)
         if self.limit in ['GM', '制片']:
-            pass
+            self.ui.mul_shot_btn2.setEnabled(1)
+            self.ui.mul_shot_line2.setEnabled(1)
         elif self.limit == '动画组长':
             if self.limit == '动画':
                 self.ui.tableView2.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 所有都为不可编辑
@@ -234,35 +237,45 @@ class ATM_UI(QMainWindow):
 
     @Slot()
     def on_addshot_btn2_clicked(self):
-        self.tabModel2.insertRow(self.tabModel2.rowCount(), QModelIndex())
-        curIndex = self.tabModel2.index(self.tabModel2.rowCount() - 1, 1)
-        self.selModel2.clearSelection()
-        self.selModel2.setCurrentIndex(curIndex, QItemSelectionModel.Select)
-        currow = curIndex.row()
         shot = self.ui.shot_line2.text()
-        if not shot:
-            QMessageBox.critical(self, '错误', '请输入镜头号')
-            return
-        if shot.isdigit():
-            newshot = 'sc%03d' % int(shot)
-        else:
-            newshot = f'sc{shot.rjust(4, "0")}'
         frame = self.ui.frame_line2.text()
         secend = self.ui.secend_line2.text()
         scene = self.ui.scene_line2.text()
         ctime = self.ui.t_lineEdit2.text()
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['shotnum']), newshot)
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['frame']), frame)
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['second']), secend)
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['scenes']), scene)
-        self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['curtime']), ctime)
-        self.tabModel2.submit()
+        newshot = []
+        if not shot:
+            QMessageBox.critical(self, '错误', '请输入镜头号')
+            return
+        if '-' in shot:
+            i1, i2 = shot.split('-')
+            for i in range(int(i1), int(i2) + 1):
+                newshot.append('sc%03d' % int(i))
+        elif shot.isdigit():
+            newshot.append('sc%03d' % int(shot))
+        else:
+            newshot.append(f'sc{shot.rjust(4, "0")}')
+        for j in newshot:
+            self.tabModel2.insertRow(self.tabModel2.rowCount(), QModelIndex())
+            curIndex = self.tabModel2.index(self.tabModel2.rowCount() - 1, 1)
+            #self.selModel2.clearSelection()
+            #self.selModel2.setCurrentIndex(curIndex, QItemSelectionModel.Select)
+            currow = curIndex.row()
+            self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['shotnum']), j)
+            self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['frame']), frame) if frame else 0
+            self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['second']), secend) if secend else 0
+            self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['scenes']), scene) if scene else 0
+            self.tabModel2.setData(self.tabModel2.index(currow, self.fldNum2['curtime']), ctime) if ctime else 0
+            self.tabModel2.submit()
 
     @Slot()
     def on_delsel_btn2_clicked(self):
         # 删除行
-        curIndex = self.selModel2.currentIndex()
-        self.tabModel2.removeRow(curIndex.row())
+        selindex = self.ui.tableView2.selectedIndexes()
+        for i in selindex:
+            self.tabModel2.removeRow(i.row())
+        #curIndex = self.selModel2.currentIndex()
+        #self.tabModel2.removeRow(curIndex.row())
+
 
 
     def getFieldNames2(self):  # 获取所有字段名称
@@ -313,6 +326,8 @@ class ATM_UI(QMainWindow):
         self.ui.tableView2.setSelectionModel(self.selModel2)  # 设置选择模型
         # self.ui.tableView2.setColumnHidden(self.fldNum['department'], True)   # 隐藏列
         self.ui.tableView2.resizeColumnsToContents()
+
+        self.ui.tableView2.hideColumn(self.fldNum2['id'])
 
     #################################################################################################################
     @Slot()             # 第三页

@@ -48,6 +48,8 @@ class myProducerWindow(QMainWindow):
         if limit == 'GM':
                 self.ui.tableView.setContextMenuPolicy(Qt.CustomContextMenu)  # 开启自定义菜单 (继承自 QWidget)
                 self.ui.tableView.customContextMenuRequested.connect(self.tableWidgetCustomContextMenu)
+                # self.ui.tableView.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+                # self.ui.tableView.horizontalHeader().customContextMenuRequested.connect(self.tableWidgetCustomContextMenu2)
                 self.tabModel.setEditStrategy(QSqlTableModel.OnFieldChange)     # 设置编辑策略 OnFieldChange 字段值变化就立即更新到数据库 OnRowChange(当前行变化更新到数据库)
                                                                                 # OnManualSubmit(所有修改暂时缓存,需要手动调用submitAll()保存所有修改,或reverAll()取消修改)
                 strList = ["资产组长", "资产", "动画组长", "动画", "制片"]
@@ -62,11 +64,24 @@ class myProducerWindow(QMainWindow):
             self.ui.delete_producer_btn.setEnabled(0)
             self.ui.tableView.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 所有都为不可编辑
         self.ui.reload_btn.setEnabled(1)
+    # def tableWidgetCustomContextMenu2(self,pos):
+    #     menu = QMenu(self)
+    #     fuzhi = menu.addAction('tttt')
+    #     niantie = menu.addAction('ssss')
+    #     fuzhi.setChecked(1)
+    #     fuzhi.setCheckable(1)
+    #
+    #     action = menu.exec(QCursor.pos())
+    #     item = self.ui.tableView.indexAt(pos)
+    #     # if action is fuzhi:
+    #     #     print('ttttttt')
+    #     if action is niantie:
+    #         print('ssssssssss')
+
     def tableWidgetCustomContextMenu(self, pos):
         menu = QMenu(self)
         fuzhi = menu.addAction('复制')
         niantie = menu.addAction('黏贴')
-
         # if self.ui.tableView.columnAt(pos.x()) == 0:
         #     show_all_assets111 = menu.addAction('查看看看看')
         action = menu.exec(QCursor.pos())
@@ -200,7 +215,7 @@ class myProducerWindow(QMainWindow):
             QMessageBox.critical(self, '查询数据失败', '打开数据表错误,出错消息\n'+self.tabModel.lastError().text())
             return
         self.__getFieldNames()
-        headerlist = ['id', '名字', '电话', '部门', '职位']
+        headerlist = ['id', '名字', '电话', '职位']
         for num, i in enumerate(self.fldNum):
             self.tabModel.setHeaderData(self.fldNum[i], Qt.Horizontal, headerlist[num])
         # 创建界面组件与数据模型字段之间数据映射
